@@ -32,35 +32,30 @@
 
 ### 1. リポジトリをクローン
 
-\```bash
+bash
 git clone https://github.com/あなたのユーザー名/github-trend-curator.git
 cd github-trend-curator
-\```
+
 
 ### 2. 仮想環境を作成
 
-\```bash
+bash
 python -m venv .venv
 .venv\Scripts\Activate.ps1  # Windows
 source .venv/bin/activate    # Mac/Linux
-\```
 
 ### 3. ライブラリをインストール
 
-\```bash
+bash
 pip install httpx duckdb python-dotenv streamlit plotly pandas numpy dbt-duckdb
-\```
 
 ### 4. GitHubトークンを設定
 
-\```bash
+bash
 # .envファイルを作成
 GITHUB_TOKEN=あなたのトークン
-\```
-
 ### 5. dbtの設定
-
-\```bash
+bash
 # ~/.dbt/profiles.ymlを作成
 github_trends:
   target: dev
@@ -70,22 +65,17 @@ github_trends:
       path: /あなたのパス/github_trends.duckdb
       schema: main
       threads: 1
-\```
 
 ### 6. データを取得
-
-\```bash
+bash
 python ingest/fetch.py
 cd transform/github_trends
 dbt run
 cd ../..
-\```
 
 ### 7. アプリを起動
-
-\```bash
+bash
 streamlit run dashboard/app.py
-\```
 
 ## 今後の改善予定
 
