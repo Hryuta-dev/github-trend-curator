@@ -3,6 +3,7 @@ import duckdb
 import plotly.express as px
 import pandas as pd
 import json
+import os
 
 DB_PATH = "github_trends.duckdb"
 
@@ -23,6 +24,7 @@ if page == "トップ":
     df = con.execute("""
         SELECT name, language, stargazers_count, description, html_url
         FROM daily_top10
+        WHERE fetched_date = (SELECT MAX(fetched_date) FROM daily_top10)
         ORDER BY rank
     """).fetchdf()
     con.close()
@@ -63,6 +65,7 @@ elif page == "リポジトリ一覧":
     df = con.execute("""
         SELECT name, language, stargazers_count, description, html_url
         FROM stg_repositories
+        WHERE fetched_date = (SELECT MAX(fetched_date) FROM stg_repositories)
         ORDER BY stargazers_count DESC
     """).fetchdf()
     con.close()
@@ -140,11 +143,13 @@ elif page == "設定":
     st.divider()
     st.subheader("データを更新する")
     st.caption("キーワードを変更したらデータを再取得してください")
-    if st.button("今すぐデータ取得", type="primary"):
-        import subprocess
-        with st.spinner("データ取得中..."):
-            subprocess.run(["python", "ingest/fetch.py"])
-        with st.spinner("Transform中..."):
-            subprocess.run(["dbt", "run"], cwd="transform/github_trends")
-        st.success("更新完了！")
-        st.rerun()
+if st.button("今すぐデータ取得", type="primary"):
+    import subprocess
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    with st.spinner("データ取得中..."):
+        subprocess.run(["python", "ingest/fetch.py"], env=env)
+    with st.spinner("Transform中..."):
+        subprocess.run(["dbt", "run"], cwd="transform/github_trends", env=env)
+    st.success("更新完了！")
+    st.rerun()
