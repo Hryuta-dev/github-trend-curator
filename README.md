@@ -103,7 +103,7 @@ streamlit run dashboard/app.py
 ブラウザで`http://localhost:8501`を開いてください。
 
 ## ディレクトリ構成
-
+```
 github-trend-curator/
 ├── ingest/
 │   └── fetch.py              # GitHub APIからデータ取得・保存
@@ -120,7 +120,7 @@ github-trend-curator/
 ├── keywords.json             # 追跡キーワード設定
 ├── .env                      # GitHubトークン（要作成）
 └── README.md,
-
+```
 ## 今後の改善予定
 
 - [ ] dbtのテスト追加
