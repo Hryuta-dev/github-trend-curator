@@ -7,7 +7,7 @@
 データエンジニアリングの基礎を実践的に学ぶために開発しました。GitHub APIからデータを取得してDuckDBに保存し、dbtで整形・集計してStreamlitで可視化するELTパイプラインを構築しています。
 
 ## アーキテクチャ
-
+```
 GitHub API
 ↓ Extract（httpx）
 DuckDB（Raw層）
@@ -15,7 +15,7 @@ DuckDB（Raw層）
 DuckDB（staging / marts層）
 ↓
 Streamlit ダッシュボード
-
+```
 ## 機能
 
 - キーワード（言語・技術）の登録・削除
