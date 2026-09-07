@@ -15,7 +15,7 @@ st.caption("あなたのキーワードに基づいたGitHubトレンド分析")
 
 # サイドバー
 st.sidebar.title("メニュー")
-page = st.sidebar.radio("ページ選択", ["トップ", "言語トレンド", "リポジトリ一覧","設定"])
+page = st.sidebar.radio("ページ選択", ["トップ", "今日上昇", "言語トレンド", "リポジトリ一覧","設定"])
 
 if page == "トップ":
     st.header("今日のTop10")
@@ -33,6 +33,54 @@ if page == "トップ":
         with st.expander(f"⭐ {row['stargazers_count']:,}  {row['name']} ({row['language']})"):
             st.write(row['description'])
             st.markdown(f"[GitHubで見る]({row['html_url']})")
+
+elif page == "今日上昇":
+    st.header("今日上昇")
+
+    con = get_con()
+    df_growth = con.execute("""
+        SELECT name, today_stars, zouka
+        FROM daily_top10_by_growth
+        WHERE today_date = (SELECT MAX(today_date) FROM daily_top10_by_growth)
+        ORDER BY trend_rank
+    """).fetchdf()
+    df_growth_rate = con.execute("""
+        SELECT name, today_stars, zouka_rate
+        FROM daily_top10_by_growth_rate
+        WHERE today_date = (SELECT MAX(today_date) FROM daily_top10_by_growth_rate)
+        ORDER BY trend_rank
+    """).fetchdf()
+    con.close()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("増加数ランキング")
+        st.dataframe(df_growth)
+
+        fig_growth = px.bar(
+            df_growth,
+            x="name",
+            y="zouka",
+            title="増加数ランキング(グラフ)",
+            height=500
+        )
+        fig_growth.update_xaxes(tickangle=45)
+        st.plotly_chart(fig_growth)
+
+    with col2:
+        st.subheader("増加率ランキング")
+        st.dataframe(df_growth_rate)
+
+        fig_growth_rate = px.bar(
+            df_growth_rate,
+            x="name",
+            y="zouka_rate",
+            title="増加率ランキング(グラフ)",
+            height=500
+        )
+        fig_growth_rate.update_xaxes(tickangle=45)
+        st.plotly_chart(fig_growth_rate)
 
 elif page == "言語トレンド":
     st.header("言語別トレンド")

@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: language_trends
+    description: "言語別スター数集計データ"
+    columns:
+      - name: language
+        description: "プログラミング言語"
+        tests:
+          - not_null
+      - name: repo_count
+        description: "リポジトリ数"
+        tests:
+          - not_null
+      - name: total_stars
+        description: "スター数合計"
+        tests:
+          - not_null
+
+  - name: daily_top10
+    description: "日別Top10リポジトリ"
+    columns:
+      - name: id
+        description: "リポジトリID"
+        tests:
+          - not_null
+      - name: rank
+        description: "順位"
+        tests:
+          - not_null
+      - name: fetched_date
+        description: "取得日"
+        tests:
+          - not_null
+
+  - name: daily_top10_by_growth
+    description: "日別・スター増加数Top10リポジトリ"
+    columns:
+      - name: id
+        description: "リポジトリID"
+        tests:
+          - not_null
+      - name: name
+        description: "リポジトリ名"
+        tests:
+         - not_null
+      - name: today_date
+        description: "今日の日付"
+        tests:
+          - not_null
+
+  - name: daily_top10_by_growth_rate
+    description: "日別・スター増加率Top10リポジトリ（1000未満のノイズ除去）"
+    columns:
+      - name: id
+        description: "リポジトリID"
+        tests:
+          - not_null
+      - name: name
+        description: "リポジトリ名"
+        tests:
+         - not_null
+      - name: today_date
+        description: "今日の日付"
+        tests:
+          - not_null

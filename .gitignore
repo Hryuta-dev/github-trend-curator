@@ -3,3 +3,6 @@
 __pycache__/
 *.duckdb
 transform/logs/
+github_trends.duckdb
+dbt.log
+target/
