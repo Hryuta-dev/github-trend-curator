@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: stg_repositories
+    description: "GitHubリポジトリの整形済みデータ"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - id
+            - fetched_date
+    columns:
+      - name: id
+        description: "リポジトリの一意なID"
+        tests:
+          - not_null
+      - name: name
+        description: "リポジトリ名"
+        tests:
+          - not_null
+      - name: language
+        description: "主要言語"
+        tests:
+          - not_null
+      - name: stargazers_count
+        description: "スター数"
+        tests:
+          - not_null
