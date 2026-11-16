@@ -5,6 +5,7 @@ import pandas as pd
 import json
 import os
 import sys
+from datetime import date
 
 DB_PATH = "github_trends.duckdb"
 
@@ -13,6 +14,21 @@ ACCENT = "#2a78d6"
 
 def get_con():
     return duckdb.connect(DB_PATH)
+
+def already_fetched_today():
+    """今日の分が取得済みかを調べる（ingest/fetch.py の判定と同じ条件。表示の切り替え専用）"""
+    con = get_con()
+    try:
+        result = con.execute("""
+            SELECT count(*) FROM raw_repositories
+            WHERE fetched_date = ?
+        """, [date.today()]).fetchone()
+        return result[0] > 0
+    except duckdb.CatalogException:
+        # まだ一度も取得しておらずテーブルが無い場合
+        return False
+    finally:
+        con.close()
 
 def style_bar(fig, horizontal=False):
     """棒グラフの見た目を整える（データには触らない）"""
@@ -302,8 +318,13 @@ elif page == "設定":
 
     st.divider()
     st.subheader("データを更新する")
-    st.caption("キーワードを変更したらデータを再取得してください")
-    if st.button("今すぐデータ取得", type="primary"):
+    st.caption("データ取得は1日1回です。キーワードの変更は次回の取得から反映されます")
+
+    fetched_today = already_fetched_today()
+    if fetched_today:
+        st.info("今日のデータはすでに取得済みです。次に取得できるのは明日以降です。")
+
+    if st.button("今すぐデータ取得", type="primary", disabled=fetched_today):
         import subprocess
         env = os.environ.copy()
         env["PYTHONUTF8"] = "1"
