@@ -4,11 +4,56 @@ import plotly.express as px
 import pandas as pd
 import json
 import os
+import shutil
+import sys
+from datetime import date
 
 DB_PATH = "github_trends.duckdb"
 
+# グラフの棒の色（.streamlit/config.toml の primaryColor と同じ色）
+ACCENT = "#2a78d6"
+
 def get_con():
     return duckdb.connect(DB_PATH)
+
+def already_fetched_today():
+    """今日の分が取得済みかを調べる（ingest/fetch.py の判定と同じ条件。表示の切り替え専用）"""
+    con = get_con()
+    try:
+        result = con.execute("""
+            SELECT count(*) FROM raw_repositories
+            WHERE fetched_date = ?
+        """, [date.today()]).fetchone()
+        return result[0] > 0
+    except duckdb.CatalogException:
+        # まだ一度も取得しておらずテーブルが無い場合
+        return False
+    finally:
+        con.close()
+
+def style_bar(fig, horizontal=False):
+    """棒グラフの見た目を整える（データには触らない）"""
+    fig.update_traces(marker_color=ACCENT)
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(l=0, r=20, t=10, b=0),
+        bargap=0.35,
+    )
+    if horizontal:
+        # 1位が一番上に来るように並べる
+        fig.update_yaxes(autorange="reversed", title=None)
+    else:
+        fig.update_xaxes(title=None)
+    return fig
+
+def show_empty():
+    st.info("表示できるデータがまだありません。「設定」ページからデータを取得してください。")
+
+st.set_page_config(
+    page_title="GitHub Trend Curator",
+    page_icon="📈",
+    layout="wide",
+)
 
 st.title("GitHub Trend Curator")
 st.caption("あなたのキーワードに基づいたGitHubトレンド分析")
@@ -19,6 +64,7 @@ page = st.sidebar.radio("ページ選択", ["トップ", "今日上昇", "言語
 
 if page == "トップ":
     st.header("今日のTop10")
+    st.caption("スター数が多い順")
 
     con = get_con()
     df = con.execute("""
@@ -29,13 +75,27 @@ if page == "トップ":
     """).fetchdf()
     con.close()
 
-    for _, row in df.iterrows():
-        with st.expander(f"⭐ {row['stargazers_count']:,}  {row['name']} ({row['language']})"):
-            st.write(row['description'])
-            st.markdown(f"[GitHubで見る]({row['html_url']})")
+    if df.empty:
+        show_empty()
+
+    for position, (_, row) in enumerate(df.iterrows(), start=1):
+        language = row['language'] if pd.notna(row['language']) else "言語不明"
+        description = row['description'] if pd.notna(row['description']) else "（説明なし）"
+
+        with st.container(border=True):
+            col_rank, col_main, col_stars = st.columns([1, 9, 2])
+            with col_rank:
+                st.subheader(f"{position}")
+            with col_main:
+                st.markdown(f"**[{row['name']}]({row['html_url']})**")
+                st.caption(language)
+                st.write(description)
+            with col_stars:
+                st.metric("スター数", f"{row['stargazers_count']:,}")
 
 elif page == "今日上昇":
     st.header("今日上昇")
+    st.caption("前日と比べてスター数が伸びたリポジトリ")
 
     con = get_con()
     df_growth = con.execute("""
@@ -52,38 +112,70 @@ elif page == "今日上昇":
     """).fetchdf()
     con.close()
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2, gap="large")
 
     with col1:
         st.subheader("増加数ランキング")
-        st.dataframe(df_growth)
 
-        fig_growth = px.bar(
-            df_growth,
-            x="name",
-            y="zouka",
-            title="増加数ランキング(グラフ)",
-            height=500
-        )
-        fig_growth.update_xaxes(tickangle=45)
-        st.plotly_chart(fig_growth)
+        if df_growth.empty:
+            show_empty()
+        else:
+            fig_growth = px.bar(
+                df_growth,
+                x="zouka",
+                y="name",
+                orientation="h",
+                labels={"zouka": "増加数", "name": "リポジトリ", "today_stars": "スター数"},
+                hover_data=["today_stars"],
+                height=420
+            )
+            fig_growth.update_traces(texttemplate="%{x:,}", textposition="outside", cliponaxis=False)
+            st.plotly_chart(style_bar(fig_growth, horizontal=True), width="stretch")
+
+            st.dataframe(
+                df_growth.style.format({"today_stars": "{:,}", "zouka": "{:,}"}, na_rep="-"),
+                column_config={
+                    "name": "リポジトリ",
+                    "today_stars": "スター数",
+                    "zouka": "増加数",
+                },
+                hide_index=True,
+                width="stretch",
+            )
 
     with col2:
         st.subheader("増加率ランキング")
-        st.dataframe(df_growth_rate)
 
-        fig_growth_rate = px.bar(
-            df_growth_rate,
-            x="name",
-            y="zouka_rate",
-            title="増加率ランキング(グラフ)",
-            height=500
-        )
-        fig_growth_rate.update_xaxes(tickangle=45)
-        st.plotly_chart(fig_growth_rate)
+        if df_growth_rate.empty:
+            show_empty()
+        else:
+            fig_growth_rate = px.bar(
+                df_growth_rate,
+                x="zouka_rate",
+                y="name",
+                orientation="h",
+                labels={"zouka_rate": "増加率", "name": "リポジトリ", "today_stars": "スター数"},
+                hover_data=["today_stars"],
+                height=420
+            )
+            fig_growth_rate.update_traces(texttemplate="%{x:.2%}", textposition="outside", cliponaxis=False)
+            fig_growth_rate.update_xaxes(tickformat=".1%")
+            st.plotly_chart(style_bar(fig_growth_rate, horizontal=True), width="stretch")
+
+            st.dataframe(
+                df_growth_rate.style.format({"today_stars": "{:,}", "zouka_rate": "{:.2%}"}, na_rep="-"),
+                column_config={
+                    "name": "リポジトリ",
+                    "today_stars": "スター数",
+                    "zouka_rate": "増加率",
+                },
+                hide_index=True,
+                width="stretch",
+            )
 
 elif page == "言語トレンド":
     st.header("言語別トレンド")
+    st.caption("言語ごとのスター数合計")
 
     con = get_con()
     df = con.execute("""
@@ -93,18 +185,39 @@ elif page == "言語トレンド":
     """).fetchdf()
     con.close()
 
-    fig = px.bar(
-        df,
-        x="language",
-        y="total_stars",
-        color="language",
-        title="言語別スター数合計",
-        labels={"total_stars": "スター数合計", "language": "言語"}
-    )
-    st.plotly_chart(fig)
+    if df.empty:
+        show_empty()
+    else:
+        fig = px.bar(
+            df,
+            x="language",
+            y="total_stars",
+            labels={
+                "total_stars": "スター数合計",
+                "language": "言語",
+                "repo_count": "リポジトリ数",
+            },
+            hover_data=["repo_count"],
+            height=420
+        )
+        fig.update_yaxes(tickformat=",")
+        st.plotly_chart(style_bar(fig), width="stretch")
 
-    st.subheader("詳細データ")
-    st.dataframe(df)
+        st.subheader("詳細データ")
+        st.dataframe(
+            df.style.format(
+                {"repo_count": "{:,}", "total_stars": "{:,}", "avg_stars": "{:,.0f}"},
+                na_rep="-",
+            ),
+            column_config={
+                "language": "言語",
+                "repo_count": "リポジトリ数",
+                "total_stars": "スター数合計",
+                "avg_stars": "平均スター数",
+            },
+            hide_index=True,
+            width="stretch",
+        )
 
 elif page == "リポジトリ一覧":
     st.header("リポジトリ一覧")
@@ -125,48 +238,64 @@ elif page == "リポジトリ一覧":
     )
 
     filtered_df = df[df['language'].isin(language_filter)]
-    st.dataframe(filtered_df)
+    st.caption(f"{len(filtered_df):,} 件を表示中（全 {len(df):,} 件）")
+    st.dataframe(
+        filtered_df.style.format({"stargazers_count": "{:,}"}, na_rep="-"),
+        column_config={
+            "name": "リポジトリ",
+            "language": "言語",
+            "stargazers_count": "スター数",
+            "description": st.column_config.TextColumn("説明", width="large"),
+            "html_url": st.column_config.LinkColumn("GitHub", display_text="開く"),
+        },
+        hide_index=True,
+        width="stretch",
+        height=600,
+    )
 
 elif page == "設定":
     st.header("キーワード管理")
+    st.caption("ここで登録した言語と技術キーワードをもとにリポジトリを取得します")
 
     with open("keywords.json", "r") as f:
         keywords = json.load(f)
 
     st.subheader("登録済みキーワード")
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2, gap="large")
 
     with col1:
-        st.write("**言語**")
-        for lang in keywords["languages"]:
-            col_a, col_b = st.columns([3, 1])
-            with col_a:
-                st.write(lang)
-            with col_b:
-                if st.button("削除", key=f"del_lang_{lang}"):
-                    keywords["languages"].remove(lang)
-                    with open("keywords.json", "w") as f:
-                        json.dump(keywords, f)
-                    st.rerun()
+        with st.container(border=True):
+            st.write("**言語**")
+            for lang in keywords["languages"]:
+                col_a, col_b = st.columns([3, 1])
+                with col_a:
+                    st.write(lang)
+                with col_b:
+                    if st.button("削除", key=f"del_lang_{lang}", width="stretch"):
+                        keywords["languages"].remove(lang)
+                        with open("keywords.json", "w") as f:
+                            json.dump(keywords, f)
+                        st.rerun()
 
     with col2:
-        st.write("**技術キーワード**")
-        for tech in keywords["techs"]:
-            col_a, col_b = st.columns([3, 1])
-            with col_a:
-                st.write(tech)
-            with col_b:
-                if st.button("削除", key=f"del_tech_{tech}"):
-                    keywords["techs"].remove(tech)
-                    with open("keywords.json", "w") as f:
-                        json.dump(keywords, f)
-                    st.rerun()
+        with st.container(border=True):
+            st.write("**技術キーワード**")
+            for tech in keywords["techs"]:
+                col_a, col_b = st.columns([3, 1])
+                with col_a:
+                    st.write(tech)
+                with col_b:
+                    if st.button("削除", key=f"del_tech_{tech}", width="stretch"):
+                        keywords["techs"].remove(tech)
+                        with open("keywords.json", "w") as f:
+                            json.dump(keywords, f)
+                        st.rerun()
 
     st.divider()
     st.subheader("キーワードを追加")
 
-    col3, col4 = st.columns(2)
+    col3, col4 = st.columns(2, gap="large")
 
     with col3:
         new_lang = st.text_input("言語を追加（例：Go、Ruby）")
@@ -190,14 +319,29 @@ elif page == "設定":
 
     st.divider()
     st.subheader("データを更新する")
-    st.caption("キーワードを変更したらデータを再取得してください")
-if st.button("今すぐデータ取得", type="primary"):
-    import subprocess
-    env = os.environ.copy()
-    env["PYTHONUTF8"] = "1"
-    with st.spinner("データ取得中..."):
-        subprocess.run(["python", "ingest/fetch.py"], env=env)
-    with st.spinner("Transform中..."):
-        subprocess.run(["dbt", "run"], cwd="transform/github_trends", env=env)
-    st.success("更新完了！")
-    st.rerun()
+    st.caption("データ取得は1日1回です。キーワードの変更は次回の取得から反映されます")
+
+    fetched_today = already_fetched_today()
+    if fetched_today:
+        st.info("今日のデータはすでに取得済みです。もう一度押すと、データ取得はスキップされ、集計（dbt run）だけが再実行されます")
+
+    if st.button("今すぐデータ取得", type="primary"):
+        import subprocess
+        env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
+        # 今動いている Python と同じフォルダの dbt を使う（仮想環境を有効化していなくても見つかる）。
+        # そこに無い環境では、これまでどおり PATH から探す。
+        dbt_command = shutil.which("dbt", path=os.path.dirname(sys.executable)) or "dbt"
+        with st.spinner("データ取得中..."):
+            subprocess.run([sys.executable, "ingest/fetch.py"], env=env)
+        with st.spinner("Transform中..."):
+            subprocess.run([dbt_command, "run"], cwd="transform/github_trends", env=env)
+        # st.rerun() で画面が描き直されても消えないよう、結果の文言を一度預けておく
+        if fetched_today:
+            st.session_state["update_message"] = "データ取得はスキップし、集計だけ再実行しました"
+        else:
+            st.session_state["update_message"] = "更新完了！"
+        st.rerun()
+
+    if "update_message" in st.session_state:
+        st.success(st.session_state.pop("update_message"))
