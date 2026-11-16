@@ -322,9 +322,9 @@ elif page == "設定":
 
     fetched_today = already_fetched_today()
     if fetched_today:
-        st.info("今日のデータはすでに取得済みです。次に取得できるのは明日以降です。")
+        st.info("今日のデータはすでに取得済みです。もう一度押すと、データ取得はスキップされ、集計（dbt run）だけが再実行されます")
 
-    if st.button("今すぐデータ取得", type="primary", disabled=fetched_today):
+    if st.button("今すぐデータ取得", type="primary"):
         import subprocess
         env = os.environ.copy()
         env["PYTHONUTF8"] = "1"
@@ -332,5 +332,12 @@ elif page == "設定":
             subprocess.run([sys.executable, "ingest/fetch.py"], env=env)
         with st.spinner("Transform中..."):
             subprocess.run(["dbt", "run"], cwd="transform/github_trends", env=env)
-        st.success("更新完了！")
+        # st.rerun() で画面が描き直されても消えないよう、結果の文言を一度預けておく
+        if fetched_today:
+            st.session_state["update_message"] = "データ取得はスキップし、集計だけ再実行しました"
+        else:
+            st.session_state["update_message"] = "更新完了！"
         st.rerun()
+
+    if "update_message" in st.session_state:
+        st.success(st.session_state.pop("update_message"))
