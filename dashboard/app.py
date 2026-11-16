@@ -4,6 +4,7 @@ import plotly.express as px
 import pandas as pd
 import json
 import os
+import shutil
 import sys
 from datetime import date
 
@@ -328,10 +329,13 @@ elif page == "設定":
         import subprocess
         env = os.environ.copy()
         env["PYTHONUTF8"] = "1"
+        # 今動いている Python と同じフォルダの dbt を使う（仮想環境を有効化していなくても見つかる）。
+        # そこに無い環境では、これまでどおり PATH から探す。
+        dbt_command = shutil.which("dbt", path=os.path.dirname(sys.executable)) or "dbt"
         with st.spinner("データ取得中..."):
             subprocess.run([sys.executable, "ingest/fetch.py"], env=env)
         with st.spinner("Transform中..."):
-            subprocess.run(["dbt", "run"], cwd="transform/github_trends", env=env)
+            subprocess.run([dbt_command, "run"], cwd="transform/github_trends", env=env)
         # st.rerun() で画面が描き直されても消えないよう、結果の文言を一度預けておく
         if fetched_today:
             st.session_state["update_message"] = "データ取得はスキップし、集計だけ再実行しました"
