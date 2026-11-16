@@ -6,3 +6,4 @@ transform/logs/
 github_trends.duckdb
 dbt.log
 target/
+CLAUDE.md
