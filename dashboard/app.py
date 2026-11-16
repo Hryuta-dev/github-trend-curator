@@ -4,6 +4,7 @@ import plotly.express as px
 import pandas as pd
 import json
 import os
+import sys
 
 DB_PATH = "github_trends.duckdb"
 
@@ -196,7 +197,7 @@ if st.button("今すぐデータ取得", type="primary"):
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
     with st.spinner("データ取得中..."):
-        subprocess.run(["python", "ingest/fetch.py"], env=env)
+        subprocess.run([sys.executable, "ingest/fetch.py"], env=env)
     with st.spinner("Transform中..."):
         subprocess.run(["dbt", "run"], cwd="transform/github_trends", env=env)
     st.success("更新完了！")
